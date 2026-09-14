@@ -1,0 +1,434 @@
+openapi: 3.0.3
+info:
+  title: BotLens
+  version: 0.1.0
+  description: >-
+    Network-side deep autoencoder sentinel that detects IoT botnet attack execution from per-device traffic snapshots.
+  x-product-slug: ai-iot-botlens
+  x-source: ai-in-iot/1805.03409v1/
+servers:
+  - url: https://api.example.com
+tags:
+  - name: Devices
+  - name: Models
+  - name: Snapshots
+  - name: Alerts
+  - name: Quarantine
+  - name: Governance
+paths:
+  /v1/devices:
+    get:
+      operationId: listDevices
+      tags: [Devices]
+      security: [{ BearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListEnvelopeDevice" }
+    post:
+      operationId: registerDevice
+      tags: [Devices]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Device" }
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeDevice" }
+  /v1/devices/{deviceId}/benign-windows:
+    parameters: [{ name: deviceId, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: certifyBenignWindow
+      tags: [Models]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BenignWindow" }
+      responses:
+        "201":
+          description: Certified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeBenignWindow" }
+  /v1/models:
+    get:
+      operationId: listModels
+      tags: [Models]
+      security: [{ BearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Models
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListEnvelopeAutoencoderModel" }
+    post:
+      operationId: trainModel
+      tags: [Models]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, benignWindowId]
+              properties:
+                deviceId: { type: string }
+                benignWindowId: { type: string }
+      responses:
+        "202":
+          description: Training accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeAutoencoderModel" }
+  /v1/snapshots:
+    post:
+      operationId: ingestSnapshot
+      tags: [Snapshots]
+      security: [{ ApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Snapshot" }
+      responses:
+        "202":
+          description: Ingested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeSnapshot" }
+  /v1/alerts:
+    get:
+      operationId: listAlerts
+      tags: [Alerts]
+      security: [{ BearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListEnvelopeAnomalyEvent" }
+  /v1/quarantine/actions:
+    post:
+      operationId: createQuarantineAction
+      tags: [Quarantine]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuarantineAction" }
+      responses:
+        "202":
+          description: Quarantine accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeQuarantineAction" }
+  /v1/governance/predictability:
+    get:
+      operationId: listPredictabilityScores
+      tags: [Governance]
+      security: [{ BearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Scores
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListEnvelopePredictabilityScore" }
+  /v1/governance/coverage:
+    get:
+      operationId: getCoverageReport
+      tags: [Governance]
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: Coverage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataEnvelopeCoverageReport" }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    ResponseMeta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    Device:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        macOrId: { type: string }
+        status: { type: string, enum: [learning, modeled, quarantined, excepted] }
+        deviceClass: { type: string }
+    BenignWindow:
+      type: object
+      required: [id, deviceId, start, end, certifiedBy]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        certifiedBy: { type: string }
+    AutoencoderModel:
+      type: object
+      required: [id, deviceId, status]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        status: { type: string, enum: [training, ready, failed, retired] }
+        featureCount: { type: integer, example: 115 }
+        threshold: { type: number, format: float }
+        votingWindow: { type: integer }
+    Snapshot:
+      type: object
+      required: [id, deviceId, capturedAt]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        capturedAt: { type: string, format: date-time }
+        reconstructionError: { type: number, format: float }
+        anomalous: { type: boolean }
+    AnomalyEvent:
+      type: object
+      required: [id, deviceId, score, status]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        score: { type: number, format: float }
+        status: { type: string, enum: [open, acknowledged, benign_marked, quarantined] }
+        topFeatures:
+          type: array
+          items: { type: string }
+    QuarantineAction:
+      type: object
+      required: [id, deviceId, status]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        status: { type: string, enum: [pending, executed, failed, released] }
+        anomalyEventId: { type: string }
+    PredictabilityScore:
+      type: object
+      required: [deviceId, score]
+      properties:
+        deviceId: { type: string }
+        score: { type: number, format: float }
+        admissionRecommendation: { type: string, enum: [allow, flag, deny_sensitive_vlan] }
+    CoverageReport:
+      type: object
+      required: [totalDevices, modeledDevices, learningDevices]
+      properties:
+        totalDevices: { type: integer }
+        modeledDevices: { type: integer }
+        learningDevices: { type: integer }
+        unmodeledDevices: { type: integer }
+    DataEnvelopeDevice:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/Device" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeDevice:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/Device" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeBenignWindow:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/BenignWindow" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeBenignWindow:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/BenignWindow" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeAutoencoderModel:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AutoencoderModel" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeAutoencoderModel:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/AutoencoderModel" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeSnapshot:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/Snapshot" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeSnapshot:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/Snapshot" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeAnomalyEvent:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AnomalyEvent" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeAnomalyEvent:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/AnomalyEvent" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeQuarantineAction:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/QuarantineAction" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeQuarantineAction:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/QuarantineAction" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopePredictabilityScore:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/PredictabilityScore" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopePredictabilityScore:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/PredictabilityScore" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    DataEnvelopeCoverageReport:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/CoverageReport" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    ListEnvelopeCoverageReport:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/CoverageReport" }
+            nextCursor: { type: string }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
